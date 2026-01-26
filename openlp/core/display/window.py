@@ -328,9 +328,11 @@ class DisplayWindow(QtWidgets.QWidget, RegistryProperties, LogMixin):
         item_transitions = self.settings.value('themes/item transitions')
         hide_mouse = (self.settings.value('advanced/hide mouse') and self.is_display)
         slide_numbers_in_footer = self.settings.value('advanced/slide numbers in footer')
+        multi_block_mode = self.settings.value('themes/multi-block mode')
         self.run_in_display('init', {
                             'isDisplay': self.is_display,
                             'doItemTransitions': item_transitions,
+                            'multiBlockMode': multi_block_mode,
                             'slideNumbersInFooter': slide_numbers_in_footer,
                             'hideMouse': hide_mouse,
                             'displayTitle': self.window_title
@@ -563,6 +565,12 @@ class DisplayWindow(QtWidgets.QWidget, RegistryProperties, LogMixin):
         Set an alert
         """
         self._run_javascript('Display.alert("{text}", {settings});'.format(text=text, settings=settings))
+
+    def set_multi_block(self, enabled):
+        """
+        Set the multi-block mode
+        """
+        self.run_in_display('setMultiBlockMode', enabled)
 
     @QtCore.Slot(result='QPixmap')
     def _grab_screenshot_safe_signal(self):

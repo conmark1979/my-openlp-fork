@@ -486,6 +486,7 @@ class Settings(QtCore.QSettings):
         'themes/last directory import': None,
         'themes/theme level': ThemeLevel.Global,
         'themes/item transitions': False,
+        'themes/multi-block mode': False,
         'themes/hot reload': False,
         'user interface/is preset layout': False,
         'user interface/live panel': True,
@@ -787,6 +788,7 @@ class Settings(QtCore.QSettings):
             'shortcuts/viewPreviewPanel': [QtGui.QKeySequence(QtCore.Qt.Key.Key_F11)],
             'shortcuts/viewLivePanel': [QtGui.QKeySequence(QtCore.Qt.Key.Key_F12)],
             'shortcuts/viewServiceManagerItem': [QtGui.QKeySequence(QtCore.Qt.Key.Key_F9)],
+            'shortcuts/multiBlockScreen': [],
             'shortcuts/webSiteItem': []
         })
 

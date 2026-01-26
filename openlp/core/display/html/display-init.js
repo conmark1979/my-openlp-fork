@@ -3,47 +3,56 @@ class CommunicationBridge {
     constructor() {
         this.target = null;
         this.initOptions = null;
+        this.queue = [];
     }
-    
+
     requestAction(action, ...values) {
         if (action == 'init') {
             this.initOptions = (values && values[0]) || null;
         }
 
-        let returnValue;
         if (this.target) {
-            returnValue = this.target._handleNativeCall(action, ...values);
+            let returnValue = this.target._handleNativeCall(action, ...values);
+            if (action == 'init') {
+                this._onInitialized();
+            }
+            return returnValue;
+        } else {
+            this.queue.push({ action: action, values: values });
         }
-
-        if (action == 'init') {
-            this._onInitialized();
-        }
-
-        return returnValue;
     }
 
     requestActionAsync(action, returnEvent, ...values) {
-        let returnValue;
         if (this.target) {
-            returnValue = this.target._handleNativeCall(action, ...values);
-        }
-
-        if (returnValue && ('then' in returnValue)) {
-            returnValue.then((value) => {
-                this._dispatchEvent(returnEvent, value || {});
-            });
+            let returnValue = this.target._handleNativeCall(action, ...values);
+            if (returnValue && ('then' in returnValue)) {
+                returnValue.then((value) => {
+                    this._dispatchEvent(returnEvent, value || {});
+                });
+            } else {
+                this._dispatchEvent(returnEvent, returnValue || {});
+            }
+            return returnValue;
         } else {
-            this._dispatchEvent(returnEvent, returnValue || {});
+            this.queue.push({ action: action, values: [returnEvent, ...values], isAsync: true });
         }
-
-        return returnValue;
     }
-    
+
     setDisplayTarget(newTarget) {
         this.target = newTarget;
         if (this.initOptions) {
             this.target._handleNativeCall('init', ...[this.initOptions]);
             this._onInitialized();
+        }
+        while (this.queue.length > 0) {
+            let cmd = this.queue.shift();
+            if (cmd.action !== 'init') {
+                if (cmd.isAsync) {
+                    this.requestActionAsync(cmd.action, ...cmd.values);
+                } else {
+                    this.target._handleNativeCall(cmd.action, ...cmd.values);
+                }
+            }
         }
     }
 
@@ -91,11 +100,13 @@ function initNativeHandlerIfAvailable() {
     }
 }
 
+// Instantiate immediately so requestAction is available as soon as scripts load
+var communicationBridge = new CommunicationBridge();
+window.communicationBridge = communicationBridge;
+window.requestAction = communicationBridge.requestAction.bind(communicationBridge);
+window.requestActionAsync = communicationBridge.requestActionAsync.bind(communicationBridge);
+window.isReady = communicationBridge.isReady.bind(communicationBridge);
+
 window.initCommunicationBridge = () => {
     initNativeHandlerIfAvailable();
-    var communicationBridge = new CommunicationBridge();
-    window.communicationBridge = communicationBridge;
-    window.requestAction = communicationBridge.requestAction.bind(communicationBridge);
-    window.requestActionAsync = communicationBridge.requestActionAsync.bind(communicationBridge);
-    window.isReady = communicationBridge.isReady.bind(communicationBridge);
 };

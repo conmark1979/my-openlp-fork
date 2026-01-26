@@ -65,7 +65,8 @@ WIDE_MENU = [
     'show_screen_button',
     'blank_screen_button',
     'theme_screen_button',
-    'desktop_screen_button'
+    'desktop_screen_button',
+    'multi_block_screen_button'
 ]
 
 NON_TEXT_MENU = [
@@ -306,11 +307,17 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
                                                 icon=UiIcons().get_icon_variant_selected('live_desktop'),
                                                 checked=False, can_shortcuts=True, category=self.category,
                                                 triggers=self.on_toggle_desktop)
+            self.multi_block_screen = create_action(self, 'multiBlockScreen',
+                                                    text=translate('OpenLP.SlideController', 'Show Three Blocks'),
+                                                    icon=UiIcons().get_icon_variant_selected('loop'),
+                                                    checked=False, can_shortcuts=True, category=self.category,
+                                                    triggers=self.on_toggle_multi_block)
             self.hide_menu.setDefaultAction(self.show_screen)
             self.hide_menu.menu().addAction(self.show_screen)
             self.hide_menu.menu().addAction(self.theme_screen)
             self.hide_menu.menu().addAction(self.blank_screen)
             self.hide_menu.menu().addAction(self.desktop_screen)
+            self.hide_menu.menu().addAction(self.multi_block_screen)
             # Wide menu of display control buttons.
             self.show_screen_button = QtWidgets.QToolButton(self.toolbar)
             self.show_screen_button.setObjectName('show_screen_button')
@@ -328,6 +335,10 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
             self.desktop_screen_button.setObjectName('desktop_screen_button')
             self.toolbar.add_toolbar_widget(self.desktop_screen_button)
             self.desktop_screen_button.setDefaultAction(self.desktop_screen)
+            self.multi_block_screen_button = QtWidgets.QToolButton(self.toolbar)
+            self.multi_block_screen_button.setObjectName('multi_block_screen_button')
+            self.toolbar.add_toolbar_widget(self.multi_block_screen_button)
+            self.multi_block_screen_button.setDefaultAction(self.multi_block_screen)
             self.toolbar.add_toolbar_action('loop_separator', separator=True)
             # Play Slides Menu
             self.play_slides_menu = QtWidgets.QToolButton(self.toolbar)
@@ -657,7 +668,10 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
             self.show_screen,
             self.desktop_screen,
             self.theme_screen,
-            self.blank_screen])
+            self.blank_screen
+        ])
+        if hasattr(self, 'multi_block_screen'):
+            widget.addAction(self.multi_block_screen)
 
     def on_controller_size_changed(self, event=None):
         """
@@ -734,6 +748,7 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
         if item.is_text():
             if self.settings.value('songs/display songbar') and not self.song_menu.menu().isEmpty():
                 self.toolbar.set_widget_visible('song_menu', True)
+            self.multi_block_screen.setChecked(self.settings.value('themes/multi-block mode'))
         if item.is_capable(ItemCapabilities.CanLoop) and len(item.slides) > 1:
             self.toolbar.set_widget_visible(LOOP_LIST)
         if item.is_media() or item.is_capable(ItemCapabilities.HasBackgroundAudio):
@@ -1110,6 +1125,22 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
         :param checked: the new state of the of the widget
         """
         self.set_hide_mode(HideMode.Screen)
+
+    def on_toggle_multi_block(self, checked):
+        """
+        Toggle the multi-block lyrics display
+        """
+        self.log_debug('on_toggle_multi_block: {}'.format(checked))
+        self.settings.setValue('themes/multi-block mode', checked)
+        self.multi_block_screen.setChecked(checked)
+        if self.preview_display:
+            self.preview_display.set_multi_block(checked)
+        for display in self.displays:
+            display.set_multi_block(checked)
+        if self.service_item:
+            self.refresh_service_item()
+            # Force a re-layout by standard means
+            Registry().execute('live_display_show')
 
     def set_hide_mode(self, hide_mode):
         """

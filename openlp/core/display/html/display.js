@@ -328,6 +328,7 @@ var Display = {
   _doItemTransitions: false,
   _skipNextTransition: false,
   _themeApplied: true,
+  _multiBlockMode: false,
   _revealConfig: {
     margin: 0.0,
     minScale: 1.0,
@@ -376,6 +377,9 @@ var Display = {
     Display._footerContainer = $(".footer")[0];
     Display._backgroundsContainer = $(".backgrounds")[0];
     Display._doTransitions = isDisplay;
+    if (options.multiBlockMode) {
+      Display.setMultiBlockMode(true);
+    }
     Reveal.initialize(Display._revealConfig);
     Reveal.addEventListener('slidechanged', Display._onSlideChanged);
     Display.setItemTransition(doItemTransitions && isDisplay);
@@ -397,10 +401,48 @@ var Display = {
     var body = $("body")[0];
     if (enable) {
       body.classList.add("transition");
-      Reveal.configure({"backgroundTransition": "fade", "transitionSpeed": "default"});
+      Reveal.configure({ "backgroundTransition": "fade", "transitionSpeed": "default" });
     } else {
       body.classList.remove("transition");
-      Reveal.configure({"backgroundTransition": "none"});
+      Reveal.configure({ "backgroundTransition": "none" });
+    }
+  },
+  /**
+   * Enable/Disable multi-block mode (previous, current, next slides shown)
+   */
+  setMultiBlockMode: function (enable) {
+    Display._multiBlockMode = enable;
+    var body = $("body")[0];
+    if (enable) {
+      body.classList.add("multi-block");
+      // Update config for Reveal.initialize
+      Display._revealConfig.transition = 'slide';
+      Display._revealConfig.viewDistance = 10;
+      // Also update for Reveal.configure if already initialized
+      if (typeof Reveal !== 'undefined' && Reveal.configure) {
+        Reveal.configure({
+          transition: 'slide',
+          viewDistance: 10
+        });
+        Reveal.layout();
+      }
+      Display._updateMultiBlockClasses();
+    } else {
+      body.classList.remove("multi-block");
+      // Reset config for Reveal.initialize
+      Display._revealConfig.transition = 'none';
+      Display._revealConfig.viewDistance = 9999;
+      // Also update for Reveal.configure if already initialized
+      if (typeof Reveal !== 'undefined' && Reveal.configure) {
+        Reveal.configure({
+          transition: 'none',
+          viewDistance: 9999
+        });
+        Reveal.layout();
+      }
+      // Clean up neighbors
+      $(".immediate-past").forEach(s => s.classList.remove("immediate-past"));
+      $(".immediate-future").forEach(s => s.classList.remove("immediate-future"));
     }
   },
   /**
@@ -424,7 +466,7 @@ var Display = {
    * @param {element} new_slides - New slides to display
    * @param {element} is_text - Used to decide if the theme main area constraints should apply
   */
-  replaceSlides: function (new_slides, is_text=false) {
+  replaceSlides: function (new_slides, is_text = false) {
     if (Display._doItemTransitions) {
       new_slides.setAttribute('data-transition', "fade");
       new_slides.setAttribute('data-transition-speed', "default");
@@ -438,13 +480,14 @@ var Display = {
       Reveal.slide(1, currentSlide.v);
       Display.reinit();
       // Timeout to allow time to transition before deleting the old slides
-      setTimeout (Display._removeLastSection, 5000);
+      setTimeout(Display._removeLastSection, 5000);
     } else {
       Reveal.slide(0, currentSlide.v);
       Reveal.sync();
       Display._removeLastSection();
       Display._skipNextTransition = false;
     }
+    Display._updateMultiBlockClasses();
   },
   /**
    * Removes the last slides item if there are more than one
@@ -471,7 +514,7 @@ var Display = {
    * @param {string} bg_color - The background color
    * @param {string} image - Path to the splash image
    */
-  setStartupSplashScreen: function(bg_color, image) {
+  setStartupSplashScreen: function (bg_color, image) {
     Display._clearSlidesList();
     var section = document.createElement("section");
     section.setAttribute("id", 0);
@@ -489,7 +532,7 @@ var Display = {
    * @param {string} bg_color - The background color
    * @param {string} image - Path to the image
    */
-  setFullscreenImage: function(bg_color, image) {
+  setFullscreenImage: function (bg_color, image) {
     Display.clearSlides();
     var section = document.createElement("section");
     section.setAttribute("id", 0);
@@ -507,7 +550,7 @@ var Display = {
    * @param {string} bg_color - The background color
    * @param {string} image_data - base64 encoded image data
    */
-  setFullscreenImageFromData: function(bg_color, image_data) {
+  setFullscreenImageFromData: function (bg_color, image_data) {
     Display.clearSlides();
     var section = document.createElement("section");
     section.setAttribute("id", 0);
@@ -569,13 +612,13 @@ var Display = {
       alertText.classList.add('scrolling');
       alertText.classList.replace("hide", "show");
       var animationSettings = "alert-scrolling-text " + settings.timeout +
-                              "s linear 0.6s " + settings.repeat + " normal";
+        "s linear 0.6s " + settings.repeat + " normal";
       alertText.style.animation = animationSettings;
     }
     else {
       Display._animationState = AnimationState.NonScrollingText;
       alertText.classList.replace("hide", "show");
-      setTimeout (function () {
+      setTimeout(function () {
         Display._animationState = AnimationState.NoAnimation;
         Display.hideAlert();
       }, settings.timeout * AlertDelay.OneSecond);
@@ -599,7 +642,7 @@ var Display = {
    * @param {Object} setttings - JSON object containing the settings for the alert
    */
   addAlertToQueue: function (text, settings) {
-    Display._alerts.push({text: text, settings: settings});
+    Display._alerts.push({ text: text, settings: settings });
   },
   /**
    * The alertTransitionEndEvent called after a transition has ended
@@ -676,7 +719,7 @@ var Display = {
     return slide;
   },
 
-  _onSlideChanged: function(event) {
+  _onSlideChanged: function (event) {
     Display._footerContainer.querySelectorAll('.footer-item')
       .forEach(footerItem => footerItem.classList.remove('active'));
     var currentSlideNth = parseInt(event.currentSlide.getAttribute('data-slide'));
@@ -684,6 +727,36 @@ var Display = {
 
     if (newActiveFooter) {
       newActiveFooter.classList.add('active');
+    }
+    Display._updateMultiBlockClasses();
+  },
+
+  /**
+   * Update classes for immediate neighbors in multi-block mode
+   */
+  _updateMultiBlockClasses: function () {
+    if (!Display._multiBlockMode) {
+      return;
+    }
+    // Clear current neighbors
+    $(".immediate-past").forEach(s => s.classList.remove("immediate-past"));
+    $(".immediate-future").forEach(s => s.classList.remove("immediate-future"));
+
+    var currentSlide = Reveal.getCurrentSlide();
+    if (!currentSlide) {
+      return;
+    }
+
+    // Mark previous sibling as immediate-past
+    var prev = currentSlide.previousElementSibling;
+    if (prev) {
+      prev.classList.add("immediate-past");
+    }
+
+    // Mark next sibling as immediate-future
+    var next = currentSlide.nextElementSibling;
+    if (next) {
+      next.classList.add("immediate-future");
     }
   },
 
@@ -749,6 +822,7 @@ var Display = {
       Display._slidesContainer.prepend(parentSection);
       Display.reinit();
     }
+    Display._updateMultiBlockClasses();
   },
   /**
    * Set image slides
@@ -923,11 +997,11 @@ var Display = {
         restored, to avoid screen flashes
       */
       Display._restorePauseBehavior();
-      Display._requestAnimationFrameExclusive(function() {
+      Display._requestAnimationFrameExclusive(function () {
         if (!Reveal.isPaused()) {
           Reveal.togglePause();
         }
-        Display._reenableGlobalTransitions(function() {
+        Display._reenableGlobalTransitions(function () {
           var documentBody = $("body")[0];
           documentBody.style.opacity = 1;
           resolve();
@@ -953,7 +1027,7 @@ var Display = {
       if (Reveal.isPaused()) {
         Reveal.togglePause();
       }
-      Display._reenableGlobalTransitions(function() {
+      Display._reenableGlobalTransitions(function () {
         resolve();
       });
     });
@@ -999,7 +1073,7 @@ var Display = {
         */
         displayWatcher.pleaseRepaint();
         /* Waiting for repaint to happen before saying that it's done. */
-        Display._requestAnimationFrameExclusive(function() {
+        Display._requestAnimationFrameExclusive(function () {
           /* We're transparent now, aborting any transition event between */
           Display._abortLastTransitionOperation();
           resolve();
@@ -1026,15 +1100,15 @@ var Display = {
         Reveal.togglePause();
       }
       Display._restorePauseBehavior();
-      Display._reenableGlobalTransitions(function() {
+      Display._reenableGlobalTransitions(function () {
         documentBody.style.opacity = 1;
         resolve();
       });
     });
   },
 
-  _reenableGlobalTransitions: function(afterCallback) {
-    Display._requestAnimationFrameExclusive(function() {
+  _reenableGlobalTransitions: function (afterCallback) {
+    Display._requestAnimationFrameExclusive(function () {
       /*
         Waiting for the previous opacity + unpause operations to complete
         to restore the transitions behavior
@@ -1050,7 +1124,7 @@ var Display = {
    * Shows again the Reveal's black pause overlay that was
    * hidden before Webview was hidden
    */
-  _restorePauseBehavior: function() {
+  _restorePauseBehavior: function () {
     document.body.classList.remove('is-desktop');
   },
 
@@ -1059,7 +1133,7 @@ var Display = {
    * Last animationFrame should be aborted to avoid race condition bugs when
    * the user changes the view modes too quickly, for example.
    */
-  _requestAnimationFrameExclusive: function(callback) {
+  _requestAnimationFrameExclusive: function (callback) {
     cancelAnimationFrame(Display._lastRequestAnimationFrameHandle);
     Display._lastRequestAnimationFrameHandle = requestAnimationFrame(callback);
   },
@@ -1068,7 +1142,7 @@ var Display = {
    * Aborts last body's transitionend and requestAnimationFrame's events, to avoid
    * race condition bugs.
    */
-  _abortLastTransitionOperation: function() {
+  _abortLastTransitionOperation: function () {
     Display._removeTransitionEndEventToBody();
     cancelAnimationFrame(Display._lastRequestAnimationFrameHandle);
   },
@@ -1077,12 +1151,12 @@ var Display = {
    * Intercepts the addEventListener call and stores it, so that it acts
    * like the ontransitionend GlobalEventHandler.
    */
-  _addTransitionEndEventToBody: function(listener) {
+  _addTransitionEndEventToBody: function (listener) {
     Display._lastTransitionEndBodyEvent = listener;
     document.body.addEventListener('transitionend', listener);
   },
 
-  _removeTransitionEndEventToBody: function() {
+  _removeTransitionEndEventToBody: function () {
     document.body.removeEventListener('transitionend', Display._lastTransitionEndBodyEvent);
   },
 
@@ -1140,14 +1214,14 @@ var Display = {
    * @param targetElement The target element to apply the theme (expected to be a `<section>` in the slides container)
    * @param is_text Used to decide if the main area constraints should be applied
    */
-  applyTheme: function (targetElement, is_text=true) {
+  applyTheme: function (targetElement, is_text = true) {
     Display._themeApplied = true;
     if (!Display._theme) {
       return;
     }
     // Set slide transitions
     var new_transition_type = "none",
-        new_transition_speed = "default";
+      new_transition_speed = "default";
     if (!!Display._theme.display_slide_transition && Display._doTransitions) {
       switch (Display._theme.display_slide_transition_type) {
         case TransitionType.Fade:
@@ -1212,27 +1286,27 @@ var Display = {
         switch (Display._theme.background_direction) {
           case GradientType.Horizontal:
             backgroundContent = _buildLinearGradient("to right",
-                                                                 Display._theme.background_start_color,
-                                                                 Display._theme.background_end_color);
+              Display._theme.background_start_color,
+              Display._theme.background_end_color);
             break;
           case GradientType.Vertical:
             backgroundContent = _buildLinearGradient("to bottom",
-                                                                 Display._theme.background_start_color,
-                                                                 Display._theme.background_end_color);
+              Display._theme.background_start_color,
+              Display._theme.background_end_color);
             break;
           case GradientType.LeftTop:
             backgroundContent = _buildLinearGradient("to right bottom",
-                                                                 Display._theme.background_start_color,
-                                                                 Display._theme.background_end_color);
+              Display._theme.background_start_color,
+              Display._theme.background_end_color);
             break;
           case GradientType.LeftBottom:
             backgroundContent = _buildLinearGradient("to top right",
-                                                                 Display._theme.background_start_color,
-                                                                 Display._theme.background_end_color);
+              Display._theme.background_start_color,
+              Display._theme.background_end_color);
             break;
           case GradientType.Circular:
             backgroundContent = _buildRadialGradient(window.innerWidth / 2, Display._theme.background_start_color,
-                                                                 Display._theme.background_end_color);
+              Display._theme.background_end_color);
             break;
           default:
             backgroundContent = "#000";
@@ -1282,7 +1356,7 @@ var Display = {
 
       "padding-bottom":
         Display._theme.display_vertical_align === VerticalAlign.Bottom ?
-        `${Display._theme.font_main_size / 8}px` : "",
+          `${Display._theme.font_main_size / 8}px` : "",
 
       // This section draws the font outline. Previously we used the proprietary -webkit-text-stroke property
       // but it draws the outline INSIDE the text, instead of OUTSIDE, so we had to go back to the old way
@@ -1290,13 +1364,13 @@ var Display = {
       "text-shadow": [
         ...(
           Display._theme.font_main_outline ?
-          _buildTextOutline(Display._theme.font_main_outline_size, Display._theme.font_main_outline_color) :
-          []
+            _buildTextOutline(Display._theme.font_main_outline_size, Display._theme.font_main_outline_color) :
+            []
         ),
         ...(
           Display._theme.font_main_shadow ?
-          _buildTextShadow(Display._theme.font_main_shadow_size, Display._theme.main_outline_size || 0, Display._theme.font_main_shadow_color) :
-          []
+            _buildTextShadow(Display._theme.font_main_shadow_size, Display._theme.main_outline_size || 0, Display._theme.font_main_shadow_color) :
+            []
         )
       ].join(", ")
     };
@@ -1333,7 +1407,7 @@ var Display = {
 
       "padding-bottom":
         Display._theme.display_vertical_align_footer === VerticalAlign.Bottom ?
-        `${Display._theme.font_main_size / 8}px` : ""
+          `${Display._theme.font_main_size / 8}px` : ""
     };
 
     for (var footerKey in footerStyle) {
@@ -1361,8 +1435,8 @@ var Display = {
     var videoElement = document.createElement('video');
     var videoTypes = [];
     if (videoElement.canPlayType('video/mp4; codecs="mp4v.20.8"') == "probably" ||
-        videoElement.canPlayType('video/mp4; codecs="avc1.42E01E"') == "pobably" ||
-        videoElement.canPlayType('video/mp4; codecs="avc1.42E01E, mp4a.40.2"') == "probably") {
+      videoElement.canPlayType('video/mp4; codecs="avc1.42E01E"') == "pobably" ||
+      videoElement.canPlayType('video/mp4; codecs="avc1.42E01E, mp4a.40.2"') == "probably") {
       videoTypes.push(['video/mp4', '*.mp4']);
     }
     if (videoElement.canPlayType('video/ogg; codecs="theora"') == "probably") {
@@ -1376,8 +1450,8 @@ var Display = {
   /**
    * Sets the scale of the page - used to make preview widgets scale
    */
-  setScale: function(scale) {
-    document.body.style.zoom = scale+"%";
+  setScale: function (scale) {
+    document.body.style.zoom = scale + "%";
   },
   /**
    * In order to check if a font exists, we need a container to do
@@ -1385,7 +1459,7 @@ var Display = {
    * some width values so that we don't have to do this step every
    * time we check if a font exists.
    */
-  _prepareFontContainer: function() {
+  _prepareFontContainer: function () {
     Display._fontContainer = document.createElement("span");
     Display._fontContainer.id = "does-font-exist";
     Display._fontContainer.innerHTML = Array(100).join("wi");
@@ -1416,7 +1490,7 @@ var Display = {
   /**
    * Translates file:// protocol URLs to openlp-library://local-file/ scheme
    */
-  _getFileUrl: function(url) {
+  _getFileUrl: function (url) {
     if (url && (url.indexOf('file://') === 0)) {
       return url.replace('file://', 'openlp-library://local-file/');
     }
