@@ -471,44 +471,84 @@ section.text-slides.stack.present {
   transition: none;
 }
 
-body.multi-block .reveal .slides section.text-slides>section.immediate-past,
-body.multi-block .reveal .slides section.text-slides>section.immediate-future {
-  opacity: 0.5 !important;
-  visibility: visible !important;
+/* Multi-block mode: Kinetic Vertical Scrolling (Absolute Positioning) */
+body.multi-block .reveal .slides section.text-slides {
+  display: block !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+
+  /* Linear Gradient Mask for edge fading (15%) */
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
+}
+
+body.multi-block .reveal .slides section.text-slides>section {
+  position: absolute !important;
+  top: 25% !important;
+  /* Base position for "Current" (start of middle 50%) */
+  left: 0 !important;
+  width: 100% !important;
+  height: 50% !important;
+  /* Default height for Current */
   display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  padding: 0 5% !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  border: none !important;
+  margin: 0 !important;
+
+  /* Default state: Off-screen below */
+  opacity: 0 !important;
+  transform: translateY(200%) scale(0.8) !important;
+  z-index: 1 !important;
+
+  /* Cubic-Bezier Transition for smooth vertical movement */
+  transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
-/* Position past slides slightly above */
+/* Past Block: Move up to Top 0% (Height 25%) */
 body.multi-block .reveal .slides section.text-slides>section.immediate-past {
-  transform: translateY(-110%) scale(0.8) !important;
+  top: 0 !important;
+  height: 25% !important;
+  opacity: 0.3 !important;
+  transform: translateY(0) scale(0.9) !important;
   z-index: 5 !important;
 }
 
-/* Position future slides slightly below */
-body.multi-block .reveal .slides section.text-slides>section.immediate-future {
-  transform: translateY(110%) scale(0.8) !important;
-  z-index: 5 !important;
-}
-
-/* Ensure present slide is clear and centered */
+/* Current Block: Center (Top 25%, Height 50%) */
 body.multi-block .reveal .slides section.text-slides>section.present {
+  top: 25% !important;
+  height: 50% !important;
   opacity: 1 !important;
   transform: translateY(0) scale(1) !important;
-  visibility: visible !important;
-  display: flex !important;
   z-index: 10 !important;
+  /* Subtle text-shadow for crispness during movement */
+  text-shadow: 0 0 10px rgba(0, 0, 0, 0.5) !important;
 }
 
-/* Hide other past/future slides in this song */
-body.multi-block .reveal .slides section.text-slides>section.past:not(.immediate-past),
-body.multi-block .reveal .slides section.text-slides>section.future:not(.immediate-future) {
+/* Future Block: Move down to Top 75% (Height 25%) */
+body.multi-block .reveal .slides section.text-slides>section.immediate-future {
+  top: 75% !important;
+  height: 25% !important;
+  opacity: 0.3 !important;
+  transform: translateY(0) scale(0.9) !important;
+  z-index: 5 !important;
+}
+
+/* Past-Past / Future-Future: Push off-screen */
+body.multi-block .reveal .slides section.text-slides>section.past:not(.immediate-past) {
+  transform: translateY(-200%) scale(0.8) !important;
   opacity: 0 !important;
-  visibility: hidden !important;
 }
 
-/* Adjust slide heights to fit better */
-body.multi-block .reveal .slides section.text-slides>section {
-  height: 30% !important;
-  top: 35% !important;
-  position: absolute !important;
+body.multi-block .reveal .slides section.text-slides>section.future:not(.immediate-future) {
+  transform: translateY(200%) scale(0.8) !important;
+  opacity: 0 !important;
 }

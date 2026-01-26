@@ -386,6 +386,17 @@ var Display = {
     displayWatcher.setInitialised(true);
   },
   /**
+   * Go to a specific slide
+   * @param {number} row - The slide index to go to
+   */
+  go_to_slide: function (row) {
+    if (Display._multiBlockMode) {
+      // Trigger class update before movement to allow transitions to start properly
+      Display._updateMultiBlockClasses();
+    }
+    Reveal.slide(row);
+  },
+  /**
    * Reinitialise Reveal
    */
   reinit: function () {
@@ -443,6 +454,7 @@ var Display = {
       // Clean up neighbors
       $(".immediate-past").forEach(s => s.classList.remove("immediate-past"));
       $(".immediate-future").forEach(s => s.classList.remove("immediate-future"));
+      $(".long-text").forEach(s => s.classList.remove("long-text"));
     }
   },
   /**
@@ -732,31 +744,96 @@ var Display = {
   },
 
   /**
+   * Fit text within a container by reducing font size
+   * @param {HTMLElement} element - The element to fit
+   * @param {number} targetHeight - The target height in px to fit within
+   * @param {number} startSize - Optional starting font size in px
+   */
+  _fitText: function (element, targetHeight, startSize) {
+    if (!element) return;
+
+    // Check if element is visible and has dimensions
+    if (element.offsetParent === null || targetHeight <= 0) {
+      return; // Element not visible, skip fitting
+    }
+
+    // Set starting size if provided, else use current computed size or reset
+    if (startSize) {
+      // Use setProperty with 'important' to prevent theme override
+      element.style.setProperty('font-size', startSize + 'px', 'important');
+    } else {
+      // Reset to allow measuring natural size
+      element.style.removeProperty('font-size');
+    }
+
+    // Force layout reflow to ensure accurate measurements after CSS transitions
+    // This reads offsetHeight which triggers a reflow, ensuring computed values are current
+    var _ = element.offsetHeight;
+
+    // Get initial font size from computed style
+    var fontSize = parseFloat(window.getComputedStyle(element).fontSize);
+
+    // Iteratively shrink font ONLY for this block until it fits the TARGET height
+    // We strictly check scrollHeight vs targetHeight to detect overflow regardless of current animation state
+    var safety = 0;
+    while (element.scrollHeight > targetHeight && fontSize > 12 && safety < 50) {
+      fontSize -= 1;
+      // Use setProperty with 'important' to prevent theme override
+      element.style.setProperty('font-size', fontSize + 'px', 'important');
+      // Force reflow after each change for accurate scrollHeight reading
+      _ = element.offsetHeight;
+      safety++;
+    }
+    return fontSize; // Return the final fitted size
+  },
+
+  /**
    * Update classes for immediate neighbors in multi-block mode
    */
   _updateMultiBlockClasses: function () {
-    if (!Display._multiBlockMode) {
-      return;
-    }
-    // Clear current neighbors
+    if (!Display._multiBlockMode) return;
+    var current = Reveal.getCurrentSlide();
+    if (!current) return;
     $(".immediate-past").forEach(s => s.classList.remove("immediate-past"));
     $(".immediate-future").forEach(s => s.classList.remove("immediate-future"));
 
-    var currentSlide = Reveal.getCurrentSlide();
-    if (!currentSlide) {
-      return;
-    }
+    var parent = current.parentElement;
+    if (parent && parent.classList.contains("text-slides")) {
+      var slides = Array.from(parent.children);
+      var idx = slides.indexOf(current);
 
-    // Mark previous sibling as immediate-past
-    var prev = currentSlide.previousElementSibling;
-    if (prev) {
-      prev.classList.add("immediate-past");
-    }
+      var prev = null;
+      var next = null;
 
-    // Mark next sibling as immediate-future
-    var next = currentSlide.nextElementSibling;
-    if (next) {
-      next.classList.add("immediate-future");
+      if (idx > 0) {
+        prev = slides[idx - 1];
+        prev.classList.add("immediate-past");
+      }
+      if (idx < slides.length - 1) {
+        next = slides[idx + 1];
+        next.classList.add("immediate-future");
+      }
+
+      // Dynamic font scaling with Persistent Sizing logic
+      // Wait for CSS transitions (800ms cubic-bezier) to complete before measuring
+      // Increased timeout from 50ms to 850ms to allow transitions to fully settle
+      setTimeout(() => {
+        // Use each element's actual clientHeight (which accounts for padding and box-sizing)
+        // instead of calculating percentages. The CSS already sets heights: current=50%, neighbors=25%
+        var currentTargetHeight = current.clientHeight;
+        var prevTargetHeight = prev ? prev.clientHeight : 0;
+        var nextTargetHeight = next ? next.clientHeight : 0;
+
+        // 1. Fit 'Current' block to its actual available height
+        var currentSize = Display._fitText(current, currentTargetHeight);
+
+        // 2. Apply 70% of that baseline to neighbors  
+        var neighborSize = currentSize * 0.7;
+
+        // 3. Fit neighbors, starting at 70%, shrinking further if they exceed their available height
+        if (prev) Display._fitText(prev, prevTargetHeight, neighborSize);
+        if (next) Display._fitText(next, nextTargetHeight, neighborSize);
+      }, 850);
     }
   },
 

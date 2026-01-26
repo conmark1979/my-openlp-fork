@@ -1135,8 +1135,10 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
         self.multi_block_screen.setChecked(checked)
         if self.preview_display:
             self.preview_display.set_multi_block(checked)
+            self.preview_display.run_in_display('_updateMultiBlockClasses')
         for display in self.displays:
             display.set_multi_block(checked)
+            display.run_in_display('_updateMultiBlockClasses')
         if self.service_item:
             self.refresh_service_item()
             # Force a re-layout by standard means
