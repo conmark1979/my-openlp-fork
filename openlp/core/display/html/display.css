@@ -28,6 +28,11 @@ body.hide-mouse {
   cursor: none;
 }
 
+body.dragging,
+body.dragging * {
+  cursor: move !important;
+}
+
 sup {
   vertical-align: super !important;
   font-size: 50% !important;
@@ -39,6 +44,9 @@ body,
 .reveal .footer {
   transition: none;
   z-index: 2;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
 }
 
 body.transition,

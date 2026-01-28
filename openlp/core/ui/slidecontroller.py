@@ -339,6 +339,20 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
             self.multi_block_screen_button.setObjectName('multi_block_screen_button')
             self.toolbar.add_toolbar_widget(self.multi_block_screen_button)
             self.multi_block_screen_button.setDefaultAction(self.multi_block_screen)
+            self.text_color_button = QtWidgets.QToolButton(self.toolbar)
+            self.text_color_button.setObjectName('text_color_button')
+            self.text_color_button.setText("Text Colour")
+            self.text_color_button.clicked.connect(self.on_text_color_clicked)
+            self.toolbar.add_toolbar_widget(self.text_color_button)
+            self.toolbar.set_widget_visible('text_color_button', False)
+            self.font_size_spinner = QtWidgets.QSpinBox(self.toolbar)
+            self.font_size_spinner.setObjectName('font_size_spinner')
+            self.font_size_spinner.setRange(20, 150)
+            self.font_size_spinner.setValue(40)
+            self.font_size_spinner.setSuffix(" pt")
+            self.font_size_spinner.valueChanged.connect(self.on_font_size_changed)
+            self.toolbar.add_toolbar_widget(self.font_size_spinner)
+            self.toolbar.set_widget_visible('font_size_spinner', False)
             self.toolbar.add_toolbar_action('loop_separator', separator=True)
             # Play Slides Menu
             self.play_slides_menu = QtWidgets.QToolButton(self.toolbar)
@@ -748,7 +762,13 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
         if item.is_text():
             if self.settings.value('songs/display songbar') and not self.song_menu.menu().isEmpty():
                 self.toolbar.set_widget_visible('song_menu', True)
-            self.multi_block_screen.setChecked(self.settings.value('themes/multi-block mode'))
+            is_multi_block = self.settings.value('themes/multi-block mode')
+            self.multi_block_screen.setChecked(is_multi_block)
+            self.log_debug(f"enable_live_tool_bar: multi-block={is_multi_block}")
+            if hasattr(self, 'text_color_button'):
+                self.toolbar.set_widget_visible('text_color_button', is_multi_block)
+            if hasattr(self, 'font_size_spinner'):
+                self.toolbar.set_widget_visible('font_size_spinner', is_multi_block)
         if item.is_capable(ItemCapabilities.CanLoop) and len(item.slides) > 1:
             self.toolbar.set_widget_visible(LOOP_LIST)
         if item.is_media() or item.is_capable(ItemCapabilities.HasBackgroundAudio):
@@ -1136,6 +1156,10 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
         if self.preview_display:
             self.preview_display.set_multi_block(checked)
             self.preview_display.run_in_display('_updateMultiBlockClasses')
+        if hasattr(self, 'text_color_button'):
+            self.toolbar.set_widget_visible('text_color_button', checked)
+        if hasattr(self, 'font_size_spinner'):
+            self.toolbar.set_widget_visible('font_size_spinner', checked)
         for display in self.displays:
             display.set_multi_block(checked)
             display.run_in_display('_updateMultiBlockClasses')
@@ -1143,6 +1167,42 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
             self.refresh_service_item()
             # Force a re-layout by standard means
             Registry().execute('live_display_show')
+
+    def on_text_color_clicked(self):
+        """
+        Open color dialog and sync text color
+        """
+        color = QtWidgets.QColorDialog.getColor()
+        if color.isValid():
+            hex_color = color.name()
+            # Apply to local preview and sync to live displays
+            # recurse and force important to override any existing styles
+            js_logic = (f"var c = '{hex_color}'; "
+                        f"if (Display._slidesContainer) {{ "
+                        f"  Display._slidesContainer.style.setProperty('color', c, 'important'); "
+                        f"  var children = Display._slidesContainer.querySelectorAll('*'); "
+                        f"  for (var i=0; i<children.length; i++) {{ children[i].style.setProperty('color', c, 'important'); }} "
+                        f"  Display._lyricChannel.postMessage({{type: 'color', color: c}}); "
+                        f"}}")
+            
+            if self.preview_display:
+                self.preview_display.run_javascript(js_logic)
+
+
+    def on_font_size_changed(self, value):
+        """
+        Update font size and broadcast
+        """
+        js_logic = (f"var s = '{value}pt'; "
+                    f"if (Display._slidesContainer) {{ "
+                    f"  Display._slidesContainer.style.fontSize = s; "
+                    f"  Display._slidesContainer.style.setProperty('font-size', s, 'important'); "
+                    f"  Display._lyricChannel.postMessage({{type: 'fontSize', size: '{value}'}}); "
+                    f"  Display.setFontSize('{value}'); "
+                    f"}}")
+        if self.preview_display:
+            self.preview_display.run_javascript(js_logic)
+
 
     def set_hide_mode(self, hide_mode):
         """

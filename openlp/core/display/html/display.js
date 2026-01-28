@@ -319,7 +319,9 @@ var Display = {
   /** @type {HTMLElement} */
   _backgroundsContainer: null,
   _revealElement: null,
-  _lyricChannel: new BroadcastChannel('lyric_position_sync'),
+  _revealElement: null,
+  _lyricChannel: new BroadcastChannel('openlp_drag_sync'),
+  _isDragging: false,
   _isDragging: false,
   _dragStartX: 0,
   _dragStartY: 0,
@@ -339,6 +341,7 @@ var Display = {
   _revealConfig: {
     margin: 0.0,
     minScale: 1.0,
+    minScale: 1.0,
     maxScale: 1.0,
     controls: false,
     progress: false,
@@ -355,17 +358,29 @@ var Display = {
     height: "100%"
   },
   _lastRequestAnimationFrameHandle: null,
+  _userMaxFontSize: 150, // Default max font size from controller
 
   /**
    * Setup drag listeners and broadcast channel
    */
   _setupDragListeners: function () {
-    Display._revealElement.addEventListener('mousedown', Display._onMouseDown);
+    Display._revealElement.addEventListener('pointerdown', Display._onPointerDown);
 
     // Listen for sync messages
     Display._lyricChannel.onmessage = (event) => {
-      // Only update if we are NOT the one dragging
-      if (!Display._isDragging) {
+      if (event.data.type === 'color') {
+        if (Display._slidesContainer) {
+          var c = event.data.color;
+          Display._slidesContainer.style.setProperty('color', c, 'important');
+          var children = Display._slidesContainer.querySelectorAll('*');
+          for (var i = 0; i < children.length; i++) {
+            children[i].style.setProperty('color', c, 'important');
+          }
+        }
+      } else if (event.data.type === 'fontSize') {
+        Display.setFontSize(event.data.size);
+      } else if (!Display._isDragging && event.data.x !== undefined) {
+        // Only update position if we are NOT the one dragging
         Display._currentTranslateX = event.data.x;
         Display._currentTranslateY = event.data.y;
         Display._updatePosition(event.data.x, event.data.y);
@@ -373,27 +388,47 @@ var Display = {
     };
   },
 
-  _onMouseDown: function (e) {
+  _onPointerDown: function (e) {
     // Only allow drag in multi-block mode
     if (!Display._multiBlockMode) return;
-    // Only left click
+    // Only left click (button 0)
     if (e.button !== 0) return;
 
     Display._isDragging = true;
     Display._dragStartX = e.clientX - Display._currentTranslateX;
     Display._dragStartY = e.clientY - Display._currentTranslateY;
 
-    document.addEventListener('mousemove', Display._onMouseMove);
-    document.addEventListener('mouseup', Display._onMouseUp);
-    e.preventDefault(); // Prevent text selection
+    // Show move cursor
+    document.body.classList.add('dragging');
+
+    // Pointer Capture is crucial for tracking outside the window
+    Display._revealElement.setPointerCapture(e.pointerId);
+    Display._revealElement.addEventListener('pointermove', Display._onPointerMove);
+    Display._revealElement.addEventListener('pointerup', Display._onPointerUp);
+    Display._revealElement.addEventListener('pointercancel', Display._onPointerUp); // Handle cancel same as up
+
+    e.preventDefault();
+    e.stopPropagation();
   },
 
-  _onMouseMove: function (e) {
+  _onPointerMove: function (e) {
     if (!Display._isDragging) return;
 
     e.preventDefault();
-    Display._currentTranslateX = e.clientX - Display._dragStartX;
-    Display._currentTranslateY = e.clientY - Display._dragStartY;
+    e.stopPropagation();
+
+    var newX = e.clientX - Display._dragStartX;
+    var newY = e.clientY - Display._dragStartY;
+
+    // Boundary check using strict limits (keep center on screen)
+    // Limit movement to 33% of screen dimensions from center
+    var limitX = window.innerWidth / 3;
+    var limitY = window.innerHeight / 3;
+    newX = Math.max(-limitX, Math.min(limitX, newX));
+    newY = Math.max(-limitY, Math.min(limitY, newY));
+
+    Display._currentTranslateX = newX;
+    Display._currentTranslateY = newY;
 
     Display._updatePosition(Display._currentTranslateX, Display._currentTranslateY);
 
@@ -404,11 +439,14 @@ var Display = {
     });
   },
 
-  _onMouseUp: function (e) {
+  _onPointerUp: function (e) {
     if (Display._isDragging) {
       Display._isDragging = false;
-      document.removeEventListener('mousemove', Display._onMouseMove);
-      document.removeEventListener('mouseup', Display._onMouseUp);
+      document.body.classList.remove('dragging');
+      Display._revealElement.releasePointerCapture(e.pointerId);
+      Display._revealElement.removeEventListener('pointermove', Display._onPointerMove);
+      Display._revealElement.removeEventListener('pointerup', Display._onPointerUp);
+      Display._revealElement.removeEventListener('pointercancel', Display._onPointerUp);
     }
   },
 
@@ -454,7 +492,14 @@ var Display = {
     Reveal.addEventListener('slidechanged', Display._onSlideChanged);
     Display.setItemTransition(doItemTransitions && isDisplay);
     displayWatcher.setInitialised(true);
+    Display.setItemTransition(doItemTransitions && isDisplay);
+    displayWatcher.setInitialised(true);
     Display._setupDragListeners();
+    // Global prevention of native dragstart
+    document.addEventListener('dragstart', function (e) {
+      e.preventDefault();
+      return false;
+    });
   },
   /**
    * Go to a specific slide
@@ -535,6 +580,19 @@ var Display = {
       Display._lyricChannel.postMessage({ x: 0, y: 0 });
     }
   },
+
+  /**
+   * Set the max font size for fitting
+   * @param {number} size - Font size in pt (but treated as pixel limit for textFit maxFontSize)
+   */
+  setFontSize: function (size) {
+    Display._userMaxFontSize = parseInt(size, 10);
+    // Force re-fitting of current view
+    if (Display._multiBlockMode) {
+      Display._updateMultiBlockClasses();
+    }
+  },
+
   /**
    * Clear the current list of slides
   */
@@ -849,7 +907,7 @@ var Display = {
         multiLine: true,
         detectMultiLine: false,
         minFontSize: 8,
-        maxFontSize: maxFontSize || 150,
+        maxFontSize: maxFontSize || Display._userMaxFontSize,
         reProcess: true,
         widthOnly: false,
         alignVert: false

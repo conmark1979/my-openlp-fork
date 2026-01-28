@@ -370,6 +370,12 @@ class DisplayWindow(QtWidgets.QWidget, RegistryProperties, LogMixin):
                                         .format(action_name=action_name, action=action, action_async=action_async,
                                                 raw_parameters=raw_parameters),
                                         is_sync)
+    
+    def run_javascript(self, script, is_sync=False):
+        """
+        Public wrapper to run Javascript in the WebView
+        """
+        return self._run_javascript(script, is_sync)
 
     def _run_javascript(self, script, is_sync=False):
         """
