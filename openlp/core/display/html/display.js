@@ -318,6 +318,13 @@ var Display = {
   _footerContainer: null,
   /** @type {HTMLElement} */
   _backgroundsContainer: null,
+  _revealElement: null,
+  _lyricChannel: new BroadcastChannel('lyric_position_sync'),
+  _isDragging: false,
+  _dragStartX: 0,
+  _dragStartY: 0,
+  _currentTranslateX: 0,
+  _currentTranslateY: 0,
   _alerts: [],
   _slides: {},
   _alertSettings: {},
@@ -350,6 +357,68 @@ var Display = {
   _lastRequestAnimationFrameHandle: null,
 
   /**
+   * Setup drag listeners and broadcast channel
+   */
+  _setupDragListeners: function () {
+    Display._revealElement.addEventListener('mousedown', Display._onMouseDown);
+
+    // Listen for sync messages
+    Display._lyricChannel.onmessage = (event) => {
+      // Only update if we are NOT the one dragging
+      if (!Display._isDragging) {
+        Display._currentTranslateX = event.data.x;
+        Display._currentTranslateY = event.data.y;
+        Display._updatePosition(event.data.x, event.data.y);
+      }
+    };
+  },
+
+  _onMouseDown: function (e) {
+    // Only allow drag in multi-block mode
+    if (!Display._multiBlockMode) return;
+    // Only left click
+    if (e.button !== 0) return;
+
+    Display._isDragging = true;
+    Display._dragStartX = e.clientX - Display._currentTranslateX;
+    Display._dragStartY = e.clientY - Display._currentTranslateY;
+
+    document.addEventListener('mousemove', Display._onMouseMove);
+    document.addEventListener('mouseup', Display._onMouseUp);
+    e.preventDefault(); // Prevent text selection
+  },
+
+  _onMouseMove: function (e) {
+    if (!Display._isDragging) return;
+
+    e.preventDefault();
+    Display._currentTranslateX = e.clientX - Display._dragStartX;
+    Display._currentTranslateY = e.clientY - Display._dragStartY;
+
+    Display._updatePosition(Display._currentTranslateX, Display._currentTranslateY);
+
+    // Broadcast position
+    Display._lyricChannel.postMessage({
+      x: Display._currentTranslateX,
+      y: Display._currentTranslateY
+    });
+  },
+
+  _onMouseUp: function (e) {
+    if (Display._isDragging) {
+      Display._isDragging = false;
+      document.removeEventListener('mousemove', Display._onMouseMove);
+      document.removeEventListener('mouseup', Display._onMouseUp);
+    }
+  },
+
+  _updatePosition: function (x, y) {
+    // Use margin to move slides independent of background AND preserve Reveal's scale transform
+    Display._slidesContainer.style.marginLeft = x + "px";
+    Display._slidesContainer.style.marginTop = y + "px";
+  },
+
+  /**
    * Start up reveal and do any other initialisation
    * @param {object} options - The initialisation options:
    *                           * {bool} isDisplay         - Is this a real display output
@@ -376,6 +445,7 @@ var Display = {
     Display._slidesContainer = $(".slides")[0];
     Display._footerContainer = $(".footer")[0];
     Display._backgroundsContainer = $(".backgrounds")[0];
+    Display._revealElement = $(".reveal")[0];
     Display._doTransitions = isDisplay;
     if (options.multiBlockMode) {
       Display.setMultiBlockMode(true);
@@ -384,6 +454,7 @@ var Display = {
     Reveal.addEventListener('slidechanged', Display._onSlideChanged);
     Display.setItemTransition(doItemTransitions && isDisplay);
     displayWatcher.setInitialised(true);
+    Display._setupDragListeners();
   },
   /**
    * Go to a specific slide
@@ -455,6 +526,13 @@ var Display = {
       $(".immediate-past").forEach(s => s.classList.remove("immediate-past"));
       $(".immediate-future").forEach(s => s.classList.remove("immediate-future"));
       $(".long-text").forEach(s => s.classList.remove("long-text"));
+
+      // Reset drag position
+      Display._currentTranslateX = 0;
+      Display._currentTranslateY = 0;
+      Display._slidesContainer.style.marginLeft = "0px";
+      Display._slidesContainer.style.marginTop = "0px";
+      Display._lyricChannel.postMessage({ x: 0, y: 0 });
     }
   },
   /**
@@ -749,42 +827,39 @@ var Display = {
    * @param {number} targetHeight - The target height in px to fit within
    * @param {number} startSize - Optional starting font size in px
    */
-  _fitText: function (element, targetHeight, startSize) {
+  /*
+   * Fit text within a container by reducing font size using textFit
+   * @param {HTMLElement} element - The element to fit
+   * @param {number} targetHeight - The target height in px to fit within
+   * @param {number} maxFontSize - Optional max font size
+   */
+  _fitText: function (element, targetHeight, maxFontSize) {
     if (!element) return;
 
-    // Check if element is visible and has dimensions
-    if (element.offsetParent === null || targetHeight <= 0) {
-      return; // Element not visible, skip fitting
+    // Ensure element has the target height set so textFit has a container to fit into
+    element.style.height = targetHeight + "px";
+
+    // Fix line height to prevent overlap
+    // Use unitless value so it scales with the inner span's font size (which textFit changes)
+    element.style.lineHeight = "1.2";
+
+    try {
+      // Call textFit library
+      textFit(element, {
+        multiLine: true,
+        detectMultiLine: false,
+        minFontSize: 8,
+        maxFontSize: maxFontSize || 150,
+        reProcess: true,
+        widthOnly: false,
+        alignVert: false
+      });
+    } catch (e) {
+      console.error("_fitText error:", e);
     }
 
-    // Set starting size if provided, else use current computed size or reset
-    if (startSize) {
-      // Use setProperty with 'important' to prevent theme override
-      element.style.setProperty('font-size', startSize + 'px', 'important');
-    } else {
-      // Reset to allow measuring natural size
-      element.style.removeProperty('font-size');
-    }
-
-    // Force layout reflow to ensure accurate measurements after CSS transitions
-    // This reads offsetHeight which triggers a reflow, ensuring computed values are current
-    var _ = element.offsetHeight;
-
-    // Get initial font size from computed style
-    var fontSize = parseFloat(window.getComputedStyle(element).fontSize);
-
-    // Iteratively shrink font ONLY for this block until it fits the TARGET height
-    // We strictly check scrollHeight vs targetHeight to detect overflow regardless of current animation state
-    var safety = 0;
-    while (element.scrollHeight > targetHeight && fontSize > 12 && safety < 50) {
-      fontSize -= 1;
-      // Use setProperty with 'important' to prevent theme override
-      element.style.setProperty('font-size', fontSize + 'px', 'important');
-      // Force reflow after each change for accurate scrollHeight reading
-      _ = element.offsetHeight;
-      safety++;
-    }
-    return fontSize; // Return the final fitted size
+    // Return computed font size for reference if needed (optional)
+    return parseFloat(window.getComputedStyle(element.querySelector('.textFitted') || element).fontSize);
   },
 
   /**
@@ -815,24 +890,23 @@ var Display = {
       }
 
       // Dynamic font scaling with Persistent Sizing logic
-      // Dynamic font scaling with Persistent Sizing logic
       // We calculate target heights manually to bypass animation/transition inconsistencies
       // Run immediately (0ms) to ensure text is sized correctly AS it transitions, not after
       setTimeout(() => {
-        var hostHeight = parent.clientHeight;
+        var hostHeight = window.innerHeight; // Use window height for better reliability
         // manually calculate target heights based on CSS percentages
         var currentTargetHeight = hostHeight * 0.50; // 50%
         var neighborTargetHeight = hostHeight * 0.25; // 25%
 
+        console.log("Fitting Text: HostHeight=" + hostHeight + " CurrentTarget=" + currentTargetHeight);
+
         // 1. Fit 'Current' block to its target 50% height
         var currentSize = Display._fitText(current, currentTargetHeight);
+        var neighborMax = currentSize ? (currentSize * 0.8) : 80;
 
-        // 2. Apply 70% of that baseline to neighbors  
-        var neighborSize = currentSize * 0.7;
-
-        // 3. Fit neighbors, starting at 70%, shrinking further if they exceed their target 25% height
-        if (prev) Display._fitText(prev, neighborTargetHeight, neighborSize);
-        if (next) Display._fitText(next, neighborTargetHeight, neighborSize);
+        // 2. Fit neighbors to their target 25% height, capped at 80% of cur size
+        if (prev) Display._fitText(prev, neighborTargetHeight, neighborMax);
+        if (next) Display._fitText(next, neighborTargetHeight, neighborMax);
       }, 0);
     }
   },
