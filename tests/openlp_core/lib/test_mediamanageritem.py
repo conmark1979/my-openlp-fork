@@ -29,7 +29,7 @@ from openlp.core.lib.mediamanageritem import MediaManagerItem
 
 
 @pytest.fixture
-def media_env():
+def media_env(qapp):
     setup_patcher = patch('openlp.core.lib.mediamanageritem.MediaManagerItem._setup')
     setup_patcher.start()
     yield

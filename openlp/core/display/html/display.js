@@ -815,25 +815,25 @@ var Display = {
       }
 
       // Dynamic font scaling with Persistent Sizing logic
-      // Wait for CSS transitions (800ms cubic-bezier) to complete before measuring
-      // Increased timeout from 50ms to 850ms to allow transitions to fully settle
+      // Dynamic font scaling with Persistent Sizing logic
+      // We calculate target heights manually to bypass animation/transition inconsistencies
+      // Run immediately (0ms) to ensure text is sized correctly AS it transitions, not after
       setTimeout(() => {
-        // Use each element's actual clientHeight (which accounts for padding and box-sizing)
-        // instead of calculating percentages. The CSS already sets heights: current=50%, neighbors=25%
-        var currentTargetHeight = current.clientHeight;
-        var prevTargetHeight = prev ? prev.clientHeight : 0;
-        var nextTargetHeight = next ? next.clientHeight : 0;
+        var hostHeight = parent.clientHeight;
+        // manually calculate target heights based on CSS percentages
+        var currentTargetHeight = hostHeight * 0.50; // 50%
+        var neighborTargetHeight = hostHeight * 0.25; // 25%
 
-        // 1. Fit 'Current' block to its actual available height
+        // 1. Fit 'Current' block to its target 50% height
         var currentSize = Display._fitText(current, currentTargetHeight);
 
         // 2. Apply 70% of that baseline to neighbors  
         var neighborSize = currentSize * 0.7;
 
-        // 3. Fit neighbors, starting at 70%, shrinking further if they exceed their available height
-        if (prev) Display._fitText(prev, prevTargetHeight, neighborSize);
-        if (next) Display._fitText(next, nextTargetHeight, neighborSize);
-      }, 850);
+        // 3. Fit neighbors, starting at 70%, shrinking further if they exceed their target 25% height
+        if (prev) Display._fitText(prev, neighborTargetHeight, neighborSize);
+        if (next) Display._fitText(next, neighborTargetHeight, neighborSize);
+      }, 0);
     }
   },
 
