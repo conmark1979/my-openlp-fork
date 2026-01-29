@@ -129,6 +129,9 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
         self.setup_ui()
         self.setup_displays()
         self.screen_size_changed()
+        # Connect signals after initialization to prevent startup crashes
+        if hasattr(self, 'block_spacing_spinner'):
+            self.block_spacing_spinner.valueChanged.connect(self.on_block_spacing_changed)
 
     def post_set_up(self):
         # Update the theme whenever the theme is changed (hot reload)
@@ -353,6 +356,19 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
             self.font_size_spinner.valueChanged.connect(self.on_font_size_changed)
             self.toolbar.add_toolbar_widget(self.font_size_spinner)
             self.toolbar.set_widget_visible('font_size_spinner', False)
+            self.font_family_dropdown = QtWidgets.QComboBox(self.toolbar)
+            self.font_family_dropdown.setObjectName('font_family_dropdown')
+            self.font_family_dropdown.addItems(["Arial", "Georgia", "Times New Roman", "Verdana", "Courier New"])
+            self.font_family_dropdown.currentTextChanged.connect(self.on_font_family_changed)
+            self.toolbar.add_toolbar_widget(self.font_family_dropdown)
+            self.toolbar.set_widget_visible('font_family_dropdown', False)
+            self.block_spacing_spinner = QtWidgets.QSpinBox(self.toolbar)
+            self.block_spacing_spinner.setObjectName('block_spacing_spinner')
+            self.block_spacing_spinner.setRange(-100, 100)
+            self.block_spacing_spinner.setValue(5)
+            self.block_spacing_spinner.setSuffix(" %")
+            self.toolbar.add_toolbar_widget(self.block_spacing_spinner)
+            self.toolbar.set_widget_visible('block_spacing_spinner', False)
             self.toolbar.add_toolbar_action('loop_separator', separator=True)
             # Play Slides Menu
             self.play_slides_menu = QtWidgets.QToolButton(self.toolbar)
@@ -769,6 +785,10 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
                 self.toolbar.set_widget_visible('text_color_button', is_multi_block)
             if hasattr(self, 'font_size_spinner'):
                 self.toolbar.set_widget_visible('font_size_spinner', is_multi_block)
+            if hasattr(self, 'font_family_dropdown'):
+                self.toolbar.set_widget_visible('font_family_dropdown', is_multi_block)
+            if hasattr(self, 'block_spacing_spinner'):
+                self.toolbar.set_widget_visible('block_spacing_spinner', is_multi_block)
         if item.is_capable(ItemCapabilities.CanLoop) and len(item.slides) > 1:
             self.toolbar.set_widget_visible(LOOP_LIST)
         if item.is_media() or item.is_capable(ItemCapabilities.HasBackgroundAudio):
@@ -1160,6 +1180,10 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
             self.toolbar.set_widget_visible('text_color_button', checked)
         if hasattr(self, 'font_size_spinner'):
             self.toolbar.set_widget_visible('font_size_spinner', checked)
+        if hasattr(self, 'font_family_dropdown'):
+            self.toolbar.set_widget_visible('font_family_dropdown', checked)
+        if hasattr(self, 'block_spacing_spinner'):
+            self.toolbar.set_widget_visible('block_spacing_spinner', checked)
         for display in self.displays:
             display.set_multi_block(checked)
             display.run_in_display('_updateMultiBlockClasses')
@@ -1185,8 +1209,14 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
                         f"  Display._lyricChannel.postMessage({{type: 'color', color: c}}); "
                         f"}}")
             
+            
+            # Send to preview display
             if self.preview_display:
                 self.preview_display.run_javascript(js_logic)
+            
+            # Send to all live displays
+            for display in self.displays:
+                display.run_javascript(js_logic)
 
 
     def on_font_size_changed(self, value):
@@ -1202,6 +1232,53 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
                     f"}}")
         if self.preview_display:
             self.preview_display.run_javascript(js_logic)
+        
+        # Send to all live displays
+        for display in self.displays:
+            display.run_javascript(js_logic)
+
+
+    def on_font_family_changed(self, family):
+        """
+        Update font family and broadcast
+        """
+        if not hasattr(self, 'preview_display') or self.preview_display is None:
+            return
+
+        js_logic = (f"var f = '{family}'; "
+                    f"if (typeof Display !== 'undefined') {{ "
+                    f"  if (Display.setFontFamily) Display.setFontFamily(f); "
+                    f"  if (Display._lyricChannel) Display._lyricChannel.postMessage({{type: 'fontFamily', family: f}}); "
+                    f"}}")
+        if self.preview_display:
+            self.preview_display.run_javascript(js_logic)
+
+        # Send to all live displays
+        for display in self.displays:
+            display.run_javascript(js_logic)
+
+
+    def on_block_spacing_changed(self, value):
+        """
+        Update block spacing and broadcast
+        """
+        try:
+            if not hasattr(self, 'preview_display') or self.preview_display is None:
+                return
+            
+            js_logic = (f"var s = {value}; "
+                        f"if (typeof Display !== 'undefined') {{ "
+                        f"  if (Display.setBlockSpacing) Display.setBlockSpacing(s); "
+                        f"  if (Display._lyricChannel) Display._lyricChannel.postMessage({{type: 'blockSpacing', spacing: s}}); "
+                        f"}}")
+            if self.preview_display:
+                self.preview_display.run_javascript(js_logic)
+
+            # Send to all live displays
+            for display in self.displays:
+                display.run_javascript(js_logic)
+        except Exception as e:
+            print(f"Error in on_block_spacing_changed: {e}")
 
 
     def set_hide_mode(self, hide_mode):

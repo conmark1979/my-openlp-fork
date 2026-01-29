@@ -358,7 +358,7 @@ var Display = {
     height: "100%"
   },
   _lastRequestAnimationFrameHandle: null,
-  _userMaxFontSize: 150, // Default max font size from controller
+  _userMaxFontSize: 40, // Default max font size from controller (matches Python default)
 
   /**
    * Setup drag listeners and broadcast channel
@@ -379,6 +379,10 @@ var Display = {
         }
       } else if (event.data.type === 'fontSize') {
         Display.setFontSize(event.data.size);
+      } else if (event.data.type === 'fontFamily') {
+        Display.setFontFamily(event.data.family);
+      } else if (event.data.type === 'blockSpacing') {
+        Display.setBlockSpacing(event.data.spacing);
       } else if (!Display._isDragging && event.data.x !== undefined) {
         // Only update position if we are NOT the one dragging
         Display._currentTranslateX = event.data.x;
@@ -553,7 +557,9 @@ var Display = {
         });
         Reveal.layout();
       }
-      Display._updateMultiBlockClasses();
+      setTimeout(function () {
+        Display._updateMultiBlockClasses();
+      }, 100);
     } else {
       body.classList.remove("multi-block");
       // Reset config for Reveal.initialize
@@ -590,6 +596,43 @@ var Display = {
     // Force re-fitting of current view
     if (Display._multiBlockMode) {
       Display._updateMultiBlockClasses();
+    }
+  },
+
+  /**
+   * Set the font family
+   * @param {string} family - Font family name
+   */
+  setFontFamily: function (family) {
+    if (Display._slidesContainer) {
+      Display._slidesContainer.style.setProperty('font-family', family, 'important');
+      // Recursively apply to children to ensure override
+      var children = Display._slidesContainer.querySelectorAll('*');
+      for (var i = 0; i < children.length; i++) {
+        children[i].style.setProperty('font-family', family, 'important');
+      }
+    }
+    // Force re-fitting as font metrics change
+    if (Display._multiBlockMode) {
+      Display._updateMultiBlockClasses();
+    }
+  },
+
+  /**
+   * Set the block spacing (margin-bottom)
+   * @param {number} spacing - Spacing in px
+   */
+  setBlockSpacing: function (spacing) {
+    // Set CSS variable on body to ensure it persists across Reveal layout changes
+    // Using vh (Viewport Height) for percentage-based spacing relative to screen size
+    document.body.style.setProperty('--block-gap', spacing + 'vh');
+
+    // Force re-fitting
+    if (Display._multiBlockMode) {
+      // Yield to layout engine to allow CSS variable to affect element dimensions
+      requestAnimationFrame(function () {
+        Display._updateMultiBlockClasses();
+      });
     }
   },
 
@@ -635,7 +678,10 @@ var Display = {
       Display._removeLastSection();
       Display._skipNextTransition = false;
     }
-    Display._updateMultiBlockClasses();
+    // Delay layout update to allow Reveal to settle its state
+    setTimeout(function () {
+      Display._updateMultiBlockClasses();
+    }, 100);
   },
   /**
    * Removes the last slides item if there are more than one
@@ -952,17 +998,32 @@ var Display = {
       // Run immediately (0ms) to ensure text is sized correctly AS it transitions, not after
       setTimeout(() => {
         var hostHeight = window.innerHeight; // Use window height for better reliability
-        // manually calculate target heights based on CSS percentages
-        var currentTargetHeight = hostHeight * 0.50; // 50%
-        var neighborTargetHeight = hostHeight * 0.25; // 25%
+        // Get dynamic block gap (defaults to 5vh if not set or legacy check)
+        var gapStr = getComputedStyle(document.body).getPropertyValue('--block-gap') || '5vh';
 
-        console.log("Fitting Text: HostHeight=" + hostHeight + " CurrentTarget=" + currentTargetHeight);
+        var gap = 0;
+        if (gapStr.includes('vh')) {
+          // Convert vh to px
+          var vhVal = parseFloat(gapStr) || 0;
+          gap = (vhVal * hostHeight) / 100;
+        } else {
+          // Assume px
+          gap = parseFloat(gapStr) || 0;
+        }
 
-        // 1. Fit 'Current' block to its target 50% height
+        // manually calculate target heights based on CSS percentages & gap
+        // Current: 40% - 2*gap
+        var currentTargetHeight = (hostHeight * 0.40) - (2 * gap);
+        // Neighbors: 20% - 1*gap
+        var neighborTargetHeight = (hostHeight * 0.20) - gap;
+
+        console.log("Fitting Text: HostHeight=" + hostHeight + " Gap=" + gap + " CurrentTarget=" + currentTargetHeight);
+
+        // 1. Fit 'Current' block to its target height
         var currentSize = Display._fitText(current, currentTargetHeight);
         var neighborMax = currentSize ? (currentSize * 0.8) : 80;
 
-        // 2. Fit neighbors to their target 25% height, capped at 80% of cur size
+        // 2. Fit neighbors to their target height, capped at 80% of cur size
         if (prev) Display._fitText(prev, neighborTargetHeight, neighborMax);
         if (next) Display._fitText(next, neighborTargetHeight, neighborMax);
       }, 0);

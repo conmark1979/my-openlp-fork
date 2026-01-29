@@ -17,6 +17,8 @@
 body {
   background: transparent;
   color: rgb(255, 255, 255) !important;
+  --block-gap: 5vh;
+  /* Default matches Python spinner */
 }
 
 body.checkerboard {
@@ -521,19 +523,19 @@ body.multi-block .reveal .slides section.text-slides>section {
   transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
-/* Past Block: Move up to Top 0% (Height 25%) */
+/* Past Block: Move up to Top 10% (Gap at bottom) */
 body.multi-block .reveal .slides section.text-slides>section.immediate-past {
-  top: 0 !important;
-  height: 25% !important;
+  top: 10% !important;
+  height: calc(20% - var(--block-gap, 0px)) !important;
   opacity: 0.3 !important;
   transform: translateY(0) scale(0.9) !important;
   z-index: 5 !important;
 }
 
-/* Current Block: Center (Top 25%, Height 50%) */
+/* Current Block: Center (Gap at top and bottom) */
 body.multi-block .reveal .slides section.text-slides>section.present {
-  top: 25% !important;
-  height: 50% !important;
+  top: calc(30% + var(--block-gap, 0px)) !important;
+  height: calc(40% - 2 * var(--block-gap, 0px)) !important;
   opacity: 1 !important;
   transform: translateY(0) scale(1) !important;
   z-index: 10 !important;
@@ -541,10 +543,10 @@ body.multi-block .reveal .slides section.text-slides>section.present {
   text-shadow: 0 0 10px rgba(0, 0, 0, 0.5) !important;
 }
 
-/* Future Block: Move down to Top 75% (Height 25%) */
+/* Future Block: Move down to Top 70% (Gap at top) */
 body.multi-block .reveal .slides section.text-slides>section.immediate-future {
-  top: 75% !important;
-  height: 25% !important;
+  top: calc(70% + var(--block-gap, 0px)) !important;
+  height: calc(20% - var(--block-gap, 0px)) !important;
   opacity: 0.3 !important;
   transform: translateY(0) scale(0.9) !important;
   z-index: 5 !important;
