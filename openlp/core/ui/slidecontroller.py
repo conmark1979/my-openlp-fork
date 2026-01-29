@@ -129,9 +129,12 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
         self.setup_ui()
         self.setup_displays()
         self.screen_size_changed()
-        # Connect signals after initialization to prevent startup crashes
         if hasattr(self, 'block_spacing_spinner'):
             self.block_spacing_spinner.valueChanged.connect(self.on_block_spacing_changed)
+        if hasattr(self, 'before_spinner'):
+            self.before_spinner.valueChanged.connect(self.on_context_changed)
+        if hasattr(self, 'after_spinner'):
+            self.after_spinner.valueChanged.connect(self.on_context_changed)
 
     def post_set_up(self):
         # Update the theme whenever the theme is changed (hot reload)
@@ -369,6 +372,25 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
             self.block_spacing_spinner.setSuffix(" %")
             self.toolbar.add_toolbar_widget(self.block_spacing_spinner)
             self.toolbar.set_widget_visible('block_spacing_spinner', False)
+            
+            # Context Control: Past
+            self.before_spinner = QtWidgets.QSpinBox(self.toolbar)
+            self.before_spinner.setObjectName('before_spinner')
+            self.before_spinner.setRange(0, 4)
+            self.before_spinner.setValue(1)
+            self.before_spinner.setSuffix(" Past")
+            self.toolbar.add_toolbar_widget(self.before_spinner)
+            self.toolbar.set_widget_visible('before_spinner', False)
+
+            # Context Control: Future
+            self.after_spinner = QtWidgets.QSpinBox(self.toolbar)
+            self.after_spinner.setObjectName('after_spinner')
+            self.after_spinner.setRange(0, 4)
+            self.after_spinner.setValue(1)
+            self.after_spinner.setSuffix(" Future")
+            self.toolbar.add_toolbar_widget(self.after_spinner)
+            self.toolbar.set_widget_visible('after_spinner', False)
+
             self.toolbar.add_toolbar_action('loop_separator', separator=True)
             # Play Slides Menu
             self.play_slides_menu = QtWidgets.QToolButton(self.toolbar)
@@ -789,6 +811,10 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
                 self.toolbar.set_widget_visible('font_family_dropdown', is_multi_block)
             if hasattr(self, 'block_spacing_spinner'):
                 self.toolbar.set_widget_visible('block_spacing_spinner', is_multi_block)
+            if hasattr(self, 'before_spinner'):
+                self.toolbar.set_widget_visible('before_spinner', is_multi_block)
+            if hasattr(self, 'after_spinner'):
+                self.toolbar.set_widget_visible('after_spinner', is_multi_block)
         if item.is_capable(ItemCapabilities.CanLoop) and len(item.slides) > 1:
             self.toolbar.set_widget_visible(LOOP_LIST)
         if item.is_media() or item.is_capable(ItemCapabilities.HasBackgroundAudio):
@@ -1184,6 +1210,10 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
             self.toolbar.set_widget_visible('font_family_dropdown', checked)
         if hasattr(self, 'block_spacing_spinner'):
             self.toolbar.set_widget_visible('block_spacing_spinner', checked)
+        if hasattr(self, 'before_spinner'):
+            self.toolbar.set_widget_visible('before_spinner', checked)
+        if hasattr(self, 'after_spinner'):
+            self.toolbar.set_widget_visible('after_spinner', checked)
         for display in self.displays:
             display.set_multi_block(checked)
             display.run_in_display('_updateMultiBlockClasses')
@@ -1279,6 +1309,32 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
                 display.run_javascript(js_logic)
         except Exception as e:
             print(f"Error in on_block_spacing_changed: {e}")
+
+
+    def on_context_changed(self, value=None):
+        """
+        Update context visibility range and broadcast
+        """
+        try:
+            if not hasattr(self, 'preview_display') or self.preview_display is None:
+                return
+
+            before = self.before_spinner.value() if hasattr(self, 'before_spinner') else 1
+            after = self.after_spinner.value() if hasattr(self, 'after_spinner') else 1
+            
+            js_logic = (f"if (typeof Display !== 'undefined') {{ "
+                        f"  window.contextBefore = {before}; "
+                        f"  window.contextAfter = {after}; "
+                        f"  if (Display._updateMultiBlockClasses) Display._updateMultiBlockClasses(); "
+                        f"}}")
+
+            if self.preview_display:
+                self.preview_display.run_javascript(js_logic)
+
+            for display in self.displays:
+                display.run_javascript(js_logic)
+        except Exception as e:
+            print(f"Error in on_context_changed: {e}")
 
 
     def set_hide_mode(self, hide_mode):

@@ -973,8 +973,14 @@ var Display = {
     if (!Display._multiBlockMode) return;
     var current = Reveal.getCurrentSlide();
     if (!current) return;
-    $(".immediate-past").forEach(s => s.classList.remove("immediate-past"));
-    $(".immediate-future").forEach(s => s.classList.remove("immediate-future"));
+    $(".immediate-past").forEach(s => {
+      s.classList.remove("immediate-past");
+      s.removeAttribute("data-dist");
+    });
+    $(".immediate-future").forEach(s => {
+      s.classList.remove("immediate-future");
+      s.removeAttribute("data-dist");
+    });
 
     var parent = current.parentElement;
     if (parent && parent.classList.contains("text-slides")) {
@@ -984,49 +990,34 @@ var Display = {
       var prev = null;
       var next = null;
 
-      if (idx > 0) {
-        prev = slides[idx - 1];
-        prev.classList.add("immediate-past");
-      }
-      if (idx < slides.length - 1) {
-        next = slides[idx + 1];
-        next.classList.add("immediate-future");
-      }
 
-      // Dynamic font scaling with Persistent Sizing logic
-      // We calculate target heights manually to bypass animation/transition inconsistencies
-      // Run immediately (0ms) to ensure text is sized correctly AS it transitions, not after
-      setTimeout(() => {
-        var hostHeight = window.innerHeight; // Use window height for better reliability
-        // Get dynamic block gap (defaults to 5vh if not set or legacy check)
-        var gapStr = getComputedStyle(document.body).getPropertyValue('--block-gap') || '5vh';
+      // Determine context limits (default to 1 if undefined)
+      var limitBefore = (typeof window.contextBefore !== 'undefined') ? window.contextBefore : 1;
+      var limitAfter = (typeof window.contextAfter !== 'undefined') ? window.contextAfter : 1;
 
-        var gap = 0;
-        if (gapStr.includes('vh')) {
-          // Convert vh to px
-          var vhVal = parseFloat(gapStr) || 0;
-          gap = (vhVal * hostHeight) / 100;
-        } else {
-          // Assume px
-          gap = parseFloat(gapStr) || 0;
+      // Tag Past Slides
+      for (var i = 1; i <= limitBefore; i++) {
+        if (idx - i >= 0) {
+          var s = slides[idx - i];
+          s.classList.add("immediate-past");
+          s.setAttribute('data-dist', i);
         }
+      }
 
-        // manually calculate target heights based on CSS percentages & gap
-        // Current: 40% - 2*gap
-        var currentTargetHeight = (hostHeight * 0.40) - (2 * gap);
-        // Neighbors: 20% - 1*gap
-        var neighborTargetHeight = (hostHeight * 0.20) - gap;
+      // Tag Future Slides
+      for (var j = 1; j <= limitAfter; j++) {
+        if (idx + j < slides.length) {
+          var s = slides[idx + j];
+          s.classList.add("immediate-future");
+          s.setAttribute('data-dist', j);
+        }
+      }
 
-        console.log("Fitting Text: HostHeight=" + hostHeight + " Gap=" + gap + " CurrentTarget=" + currentTargetHeight);
-
-        // 1. Fit 'Current' block to its target height
-        var currentSize = Display._fitText(current, currentTargetHeight);
-        var neighborMax = currentSize ? (currentSize * 0.8) : 80;
-
-        // 2. Fit neighbors to their target height, capped at 80% of cur size
-        if (prev) Display._fitText(prev, neighborTargetHeight, neighborMax);
-        if (next) Display._fitText(next, neighborTargetHeight, neighborMax);
-      }, 0);
+      /*
+      // Dynamic Sizing Removed for Flexbox Layout
+      // We now rely on CSS 'height: auto' and flow layout.
+      // Font size is constant (user setting).
+      */
     }
   },
 

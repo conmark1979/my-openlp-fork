@@ -481,9 +481,12 @@ section.text-slides.stack.present {
   transition: none;
 }
 
-/* Multi-block mode: Kinetic Vertical Scrolling (Absolute Positioning) */
+/* Multi-block mode: Flexbox Column Layout */
 body.multi-block .reveal .slides section.text-slides {
-  display: block !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  align-items: center !important;
   position: absolute !important;
   top: 0 !important;
   left: 0 !important;
@@ -497,68 +500,88 @@ body.multi-block .reveal .slides section.text-slides {
   mask-image: linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
 }
 
+/* Common Block Styles (Variable Height) */
 body.multi-block .reveal .slides section.text-slides>section {
-  position: absolute !important;
-  top: 25% !important;
-  /* Base position for "Current" (start of middle 50%) */
-  left: 0 !important;
+  position: relative !important;
+  /* Flow layout */
   width: 100% !important;
-  height: 50% !important;
-  /* Default height for Current */
+  height: auto !important;
+  /* Fit to text */
+  flex: 0 0 auto !important;
+  /* Don't stretch */
+
+  /* Default State: Hidden (Collapsed) */
+  max-height: 0 !important;
+  opacity: 0 !important;
+  margin-bottom: 0 !important;
+  padding: 0 5% !important;
+  /* Padding stays but horizontal only effectively */
+  overflow: hidden !important;
+
   display: flex !important;
+  /* Always flex, just hidden by height */
   justify-content: center !important;
   align-items: center !important;
-  padding: 0 5% !important;
+  /* Center text horizontally */
   box-sizing: border-box !important;
-  overflow: hidden !important;
   border: none !important;
-  margin: 0 !important;
 
-  /* Default state: Off-screen below */
-  opacity: 0 !important;
-  transform: translateY(200%) scale(0.8) !important;
-  z-index: 1 !important;
-
-  /* Cubic-Bezier Transition for smooth vertical movement */
+  /* Smooth expansion/collapse */
   transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
-/* Past Block: Move up to Top 10% (Gap at bottom) */
-body.multi-block .reveal .slides section.text-slides>section.immediate-past {
-  top: 10% !important;
-  height: calc(20% - var(--block-gap, 0px)) !important;
-  opacity: 0.3 !important;
-  transform: translateY(0) scale(0.9) !important;
-  z-index: 5 !important;
+/* Remove margin from last child always */
+body.multi-block .reveal .slides section.text-slides>section:last-child {
+  margin-bottom: 0 !important;
 }
 
-/* Current Block: Center (Gap at top and bottom) */
-body.multi-block .reveal .slides section.text-slides>section.present {
-  top: calc(30% + var(--block-gap, 0px)) !important;
-  height: calc(40% - 2 * var(--block-gap, 0px)) !important;
+/* Visible States (Expanded) */
+body.multi-block .reveal .slides section.text-slides>section.present,
+body.multi-block .reveal .slides section.text-slides>section.immediate-past,
+body.multi-block .reveal .slides section.text-slides>section.immediate-future {
+  max-height: 100vh !important;
+  /* arbitrary large limit to allow full text */
   opacity: 1 !important;
-  transform: translateY(0) scale(1) !important;
-  z-index: 10 !important;
-  /* Subtle text-shadow for crispness during movement */
+  transform: none !important;
+  margin-bottom: var(--block-gap, 0px) !important;
+  padding: 2vh 5% !important;
+  /* Restore vertical padding */
+}
+
+/* Opacity Levels for Context */
+body.multi-block .reveal .slides section.text-slides>section.immediate-past {
+  opacity: 0.3 !important;
+}
+
+body.multi-block .reveal .slides section.text-slides>section.immediate-future {
+  opacity: 0.3 !important;
+}
+
+/* Stacking/Fading for distant neighbors */
+body.multi-block .reveal .slides section.text-slides>section[data-dist="2"] {
+  opacity: 0.2 !important;
+}
+
+body.multi-block .reveal .slides section.text-slides>section[data-dist="3"] {
+  opacity: 0.1 !important;
+}
+
+body.multi-block .reveal .slides section.text-slides>section[data-dist="4"] {
+  opacity: 0.05 !important;
+}
+
+/* Current Slide Distinction */
+body.multi-block .reveal .slides section.text-slides>section.present {
+  opacity: 1 !important;
   text-shadow: 0 0 10px rgba(0, 0, 0, 0.5) !important;
 }
 
-/* Future Block: Move down to Top 70% (Gap at top) */
-body.multi-block .reveal .slides section.text-slides>section.immediate-future {
-  top: calc(70% + var(--block-gap, 0px)) !important;
-  height: calc(20% - var(--block-gap, 0px)) !important;
-  opacity: 0.3 !important;
-  transform: translateY(0) scale(0.9) !important;
-  z-index: 5 !important;
-}
-
-/* Past-Past / Future-Future: Push off-screen */
-body.multi-block .reveal .slides section.text-slides>section.past:not(.immediate-past) {
-  transform: translateY(-200%) scale(0.8) !important;
-  opacity: 0 !important;
-}
-
+/* Hide Past-Past / Future-Future (Redundant but safe) */
+body.multi-block .reveal .slides section.text-slides>section.past:not(.immediate-past),
 body.multi-block .reveal .slides section.text-slides>section.future:not(.immediate-future) {
-  transform: translateY(200%) scale(0.8) !important;
+  max-height: 0 !important;
   opacity: 0 !important;
+  margin: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
 }
