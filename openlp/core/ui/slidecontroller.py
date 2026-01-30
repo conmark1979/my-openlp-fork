@@ -135,6 +135,8 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
             self.before_spinner.valueChanged.connect(self.on_context_changed)
         if hasattr(self, 'after_spinner'):
             self.after_spinner.valueChanged.connect(self.on_context_changed)
+        if hasattr(self, 'indentation_spinner'):
+            self.indentation_spinner.valueChanged.connect(self.on_indentation_changed)
 
     def post_set_up(self):
         # Update the theme whenever the theme is changed (hot reload)
@@ -345,51 +347,72 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
             self.multi_block_screen_button.setObjectName('multi_block_screen_button')
             self.toolbar.add_toolbar_widget(self.multi_block_screen_button)
             self.multi_block_screen_button.setDefaultAction(self.multi_block_screen)
-            self.text_color_button = QtWidgets.QToolButton(self.toolbar)
+            self.multi_block_screen_button.setDefaultAction(self.multi_block_screen)
+            
+            # Cinematic Toolbar (Additional Row) - Initialized EARLY
+            self.cinematic_toolbar = QtWidgets.QWidget(self.controller)
+            self.cinematic_toolbar.setObjectName('cinematic_toolbar')
+            self.cinematic_layout = QtWidgets.QHBoxLayout(self.cinematic_toolbar)
+            self.cinematic_layout.setContentsMargins(2, 2, 2, 2)
+            self.cinematic_layout.setSpacing(4)
+            # We add it to layout LATER (to ensure it is below toolbar)
+            self.cinematic_toolbar.setVisible(False)
+            
+            # --- Cinematic Mode Controls (Moved to Cinematic Toolbar) ---
+            self.text_color_button = QtWidgets.QToolButton(self.cinematic_toolbar)
             self.text_color_button.setObjectName('text_color_button')
             self.text_color_button.setText("Text Colour")
             self.text_color_button.clicked.connect(self.on_text_color_clicked)
-            self.toolbar.add_toolbar_widget(self.text_color_button)
-            self.toolbar.set_widget_visible('text_color_button', False)
-            self.font_size_spinner = QtWidgets.QSpinBox(self.toolbar)
+            self.cinematic_layout.addWidget(self.text_color_button)
+
+            self.font_size_spinner = QtWidgets.QSpinBox(self.cinematic_toolbar)
             self.font_size_spinner.setObjectName('font_size_spinner')
             self.font_size_spinner.setRange(20, 150)
             self.font_size_spinner.setValue(40)
             self.font_size_spinner.setSuffix(" pt")
             self.font_size_spinner.valueChanged.connect(self.on_font_size_changed)
-            self.toolbar.add_toolbar_widget(self.font_size_spinner)
-            self.toolbar.set_widget_visible('font_size_spinner', False)
-            self.font_family_dropdown = QtWidgets.QComboBox(self.toolbar)
+            self.cinematic_layout.addWidget(self.font_size_spinner)
+
+            self.font_family_dropdown = QtWidgets.QComboBox(self.cinematic_toolbar)
             self.font_family_dropdown.setObjectName('font_family_dropdown')
             self.font_family_dropdown.addItems(["Arial", "Georgia", "Times New Roman", "Verdana", "Courier New"])
             self.font_family_dropdown.currentTextChanged.connect(self.on_font_family_changed)
-            self.toolbar.add_toolbar_widget(self.font_family_dropdown)
-            self.toolbar.set_widget_visible('font_family_dropdown', False)
-            self.block_spacing_spinner = QtWidgets.QSpinBox(self.toolbar)
+            self.cinematic_layout.addWidget(self.font_family_dropdown)
+
+            self.block_spacing_spinner = QtWidgets.QSpinBox(self.cinematic_toolbar)
             self.block_spacing_spinner.setObjectName('block_spacing_spinner')
             self.block_spacing_spinner.setRange(-100, 100)
             self.block_spacing_spinner.setValue(5)
             self.block_spacing_spinner.setSuffix(" %")
-            self.toolbar.add_toolbar_widget(self.block_spacing_spinner)
-            self.toolbar.set_widget_visible('block_spacing_spinner', False)
+            self.cinematic_layout.addWidget(self.block_spacing_spinner)
             
             # Context Control: Past
-            self.before_spinner = QtWidgets.QSpinBox(self.toolbar)
+            self.before_spinner = QtWidgets.QSpinBox(self.cinematic_toolbar)
             self.before_spinner.setObjectName('before_spinner')
             self.before_spinner.setRange(0, 4)
             self.before_spinner.setValue(1)
             self.before_spinner.setSuffix(" Past")
-            self.toolbar.add_toolbar_widget(self.before_spinner)
-            self.toolbar.set_widget_visible('before_spinner', False)
+            self.cinematic_layout.addWidget(self.before_spinner)
 
             # Context Control: Future
-            self.after_spinner = QtWidgets.QSpinBox(self.toolbar)
+            self.after_spinner = QtWidgets.QSpinBox(self.cinematic_toolbar)
             self.after_spinner.setObjectName('after_spinner')
             self.after_spinner.setRange(0, 4)
             self.after_spinner.setValue(1)
             self.after_spinner.setSuffix(" Future")
-            self.toolbar.add_toolbar_widget(self.after_spinner)
-            self.toolbar.set_widget_visible('after_spinner', False)
+            self.cinematic_layout.addWidget(self.after_spinner)
+            
+            # Indentation Control
+            self.indentation_spinner = QtWidgets.QSpinBox(self.cinematic_toolbar)
+            self.indentation_spinner.setObjectName('indentation_spinner')
+            self.indentation_spinner.setRange(0, 500)
+            self.indentation_spinner.setValue(0)
+            self.indentation_spinner.setSuffix(" px Indent")
+            self.cinematic_layout.addWidget(self.indentation_spinner)
+            
+            # Spacer to keep left aligned
+            self.cinematic_spacer = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Minimum)
+            self.cinematic_layout.addItem(self.cinematic_spacer)
 
             self.toolbar.add_toolbar_action('loop_separator', separator=True)
             # Play Slides Menu
@@ -439,6 +462,9 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
                                                               'Clear'),
                                             triggers=self.on_clear)
         self.controller_layout.addWidget(self.toolbar)
+        
+        if hasattr(self, 'cinematic_toolbar'):
+            self.controller_layout.addWidget(self.cinematic_toolbar)
         # Build a Media ToolBar
         self.mediabar = MediaToolbar(self)
         self.mediabar.identification_label.setText(translate('OpenLP.SlideController', 'Media'))
@@ -803,18 +829,8 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
             is_multi_block = self.settings.value('themes/multi-block mode')
             self.multi_block_screen.setChecked(is_multi_block)
             self.log_debug(f"enable_live_tool_bar: multi-block={is_multi_block}")
-            if hasattr(self, 'text_color_button'):
-                self.toolbar.set_widget_visible('text_color_button', is_multi_block)
-            if hasattr(self, 'font_size_spinner'):
-                self.toolbar.set_widget_visible('font_size_spinner', is_multi_block)
-            if hasattr(self, 'font_family_dropdown'):
-                self.toolbar.set_widget_visible('font_family_dropdown', is_multi_block)
-            if hasattr(self, 'block_spacing_spinner'):
-                self.toolbar.set_widget_visible('block_spacing_spinner', is_multi_block)
-            if hasattr(self, 'before_spinner'):
-                self.toolbar.set_widget_visible('before_spinner', is_multi_block)
-            if hasattr(self, 'after_spinner'):
-                self.toolbar.set_widget_visible('after_spinner', is_multi_block)
+            if hasattr(self, 'cinematic_toolbar'):
+                self.cinematic_toolbar.setVisible(is_multi_block)
         if item.is_capable(ItemCapabilities.CanLoop) and len(item.slides) > 1:
             self.toolbar.set_widget_visible(LOOP_LIST)
         if item.is_media() or item.is_capable(ItemCapabilities.HasBackgroundAudio):
@@ -1202,18 +1218,8 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
         if self.preview_display:
             self.preview_display.set_multi_block(checked)
             self.preview_display.run_in_display('_updateMultiBlockClasses')
-        if hasattr(self, 'text_color_button'):
-            self.toolbar.set_widget_visible('text_color_button', checked)
-        if hasattr(self, 'font_size_spinner'):
-            self.toolbar.set_widget_visible('font_size_spinner', checked)
-        if hasattr(self, 'font_family_dropdown'):
-            self.toolbar.set_widget_visible('font_family_dropdown', checked)
-        if hasattr(self, 'block_spacing_spinner'):
-            self.toolbar.set_widget_visible('block_spacing_spinner', checked)
-        if hasattr(self, 'before_spinner'):
-            self.toolbar.set_widget_visible('before_spinner', checked)
-        if hasattr(self, 'after_spinner'):
-            self.toolbar.set_widget_visible('after_spinner', checked)
+        if hasattr(self, 'cinematic_toolbar'):
+            self.cinematic_toolbar.setVisible(checked)
         for display in self.displays:
             display.set_multi_block(checked)
             display.run_in_display('_updateMultiBlockClasses')
@@ -1325,16 +1331,35 @@ class SlideController(QtWidgets.QWidget, LogMixin, RegistryProperties):
             js_logic = (f"if (typeof Display !== 'undefined') {{ "
                         f"  window.contextBefore = {before}; "
                         f"  window.contextAfter = {after}; "
-                        f"  if (Display._updateMultiBlockClasses) Display._updateMultiBlockClasses(); "
+                        f"  if (Display._multiBlockMode) {{ Display._updateMultiBlockClasses(); }} "
                         f"}}")
-
+            
+            
+            # Send to preview display
             if self.preview_display:
                 self.preview_display.run_javascript(js_logic)
-
+            
+            # Send to all live displays
             for display in self.displays:
                 display.run_javascript(js_logic)
         except Exception as e:
             print(f"Error in on_context_changed: {e}")
+
+    def on_indentation_changed(self, value):
+        """
+        Update font indentation and broadcast
+        """
+        js_logic = (f"if (typeof Display !== 'undefined' && Display.setIndentation) {{ "
+                    f"  Display.setIndentation('{value}'); "
+                    f"}}")
+        
+        # Send to preview display
+        if self.preview_display:
+            self.preview_display.run_javascript(js_logic)
+        
+        # Send to all live displays
+        for display in self.displays:
+            display.run_javascript(js_logic)
 
 
     def set_hide_mode(self, hide_mode):

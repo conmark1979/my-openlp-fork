@@ -593,10 +593,47 @@ var Display = {
    */
   setFontSize: function (size) {
     Display._userMaxFontSize = parseInt(size, 10);
+
+    // Explicitly apply to container to ensure inheritance
+    if (Display._slidesContainer) {
+      Display._slidesContainer.style.fontSize = size + "pt";
+      Display._slidesContainer.style.setProperty("font-size", size + "pt", "important");
+    }
+
+    // Brute Force: Apply to all existng text slides and their children
+    var blocks = document.querySelectorAll('.text-slides > section');
+    blocks.forEach(function (block) {
+      block.style.fontSize = size + "pt";
+      block.style.setProperty("font-size", size + "pt", "important");
+    });
+
     // Force re-fitting of current view
     if (Display._multiBlockMode) {
       Display._updateMultiBlockClasses();
     }
+  },
+
+  /**
+   * Set indentation for text blocks
+   * @param {string} val - Indentation value (px)
+   */
+  setIndentation: function (val) {
+    var pxVal = val + "px";
+
+    // Apply to container (might inherit)
+    if (Display._slidesContainer) {
+      Display._slidesContainer.style.paddingLeft = pxVal;
+    }
+
+    // Apply explicitly to all sections
+    var blocks = document.querySelectorAll('.text-slides > section');
+    blocks.forEach(function (block) {
+      block.style.paddingLeft = pxVal;
+      // Also ensure text-align is left if indenting? Or keep centered?
+      // Usually indentation implies start-alignment.
+      // User didn't specify, but centering + indent just shifts center.
+      // Let's assume just padding for now.
+    });
   },
 
   /**
